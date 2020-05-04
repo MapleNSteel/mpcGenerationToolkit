@@ -1,18 +1,14 @@
 from IntegrationMethods.symbolicRK4 import *
-from Models.SomeModel2 import SomeModel2
+from Models.double_integrator import DoubleIntegrator
 import numpy as np
 from MPC.MPC import *
-import matplotlib.pyplot as plt
-
-fig = plt.figure()
-ax1 = fig.add_subplot(1,3,1)
-ax2 = fig.add_subplot(1,3,2)
-ax3 = fig.add_subplot(1,3,3)
 
 N = 10; T = 1.;
 
-Q = np.eye(SomeModel2.NX+SomeModel2.NU)
-R = np.eye(SomeModel2.NX)*5
+Q = 1e-3*np.eye(DoubleIntegrator.NX+DoubleIntegrator.NU)
+Q[0, 0] = 1
+R = np.eye(DoubleIntegrator.NX)
+R[0, 0] = 5
 
 eq_constraint = None
 def ineq_constraint(state_vec, control_vec, params):
@@ -27,15 +23,15 @@ def ineq_constraint(state_vec, control_vec, params):
 		g = g.col_join(Matrix([-control_vec[0, i]-1]))
 	return g
 
-term_ineq_constraint = ineq_constraint
+term_ineq_constraint = None
 term_eq_constraint = None
 
-SomeModel2 = SomeModel2(RK4)
+DoubleIntegrator = DoubleIntegrator(RK4)
 
-code_gen_file_name = "Code_Gen/code_gen_inverted_pendulum_mobile"
+code_gen_file_name = "Code_Gen/code_gen_double_integrator"
 
 #Initialise MPC
-mpc = MPC(SomeModel2, N, T, Q, R, eq_constraint, ineq_constraint, term_ineq_constraint, term_eq_constraint, code_gen_file_name)
+mpc = MPC(DoubleIntegrator, N, T, Q, R, eq_constraint, ineq_constraint, term_ineq_constraint, term_eq_constraint, code_gen_file_name)
 mpc.initialiseEqualityConstraints()
 mpc.initialiseInequalityConstraints()
 mpc.lineariseConstraints()

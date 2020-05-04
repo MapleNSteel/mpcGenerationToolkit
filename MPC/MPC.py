@@ -14,6 +14,17 @@ class MPC:
 		self.printer = C99CodePrinter()
 		
 		self.gen_code = "import numpy as np\nimport math\n"
+		self.gen_code+= "N ="
+		self.gen_code+= str(N)
+		self.gen_code+= "\nT="
+		self.gen_code+= str(T)
+		self.gen_code+= "\nNX="
+		self.gen_code+= str(model.NX)
+		self.gen_code+= "\nNU="
+		self.gen_code+= str(model.NU)
+		self.gen_code+= "\nNP="
+		self.gen_code+= str(model.NP)
+		self.gen_code+= "\n"
 		
 		self.model = model
 		
@@ -50,60 +61,51 @@ class MPC:
 
 		self.sym_state_vector = MatrixSymbol('x', model.NX, N+1)
 		self.sym_control_vector = MatrixSymbol('u', model.NU, N)
-
-		self.sym_X = Matrix([])
-		for i in range(0, self.N+1):
-			state_vec = sympy.zeros(self.model.NX, 1)
-			for j in range(0, self.model.NX):
-				state_vec[j, 0] = self.sym_state_vector[j,i]
-			self.sym_X = self.sym_X.col_join(state_vec)
-			
-			if(i == self.N):
-				continue
-			control_vec = sympy.zeros(self.model.NU, 1)
-			for j in range(0, self.model.NU):
-				control_vec[j, 0] = self.sym_control_vector[j,i]
-			self.sym_X = self.sym_X.col_join(control_vec)
-		
-		self.gen_code += "def forward_integration(x0, u0, params, dt):\n\tx_next = "
-		self.gen_code += sympy.printing.lambdarepr.lambdarepr(self.forward_integration)
-		self.gen_code = self.gen_code.replace("ImmutableDenseMatrix", "np.array")
-		self.gen_code += "\n\treturn x_next\n"
 		
 		self.sym_state_ref_vector = MatrixSymbol('x_ref', model.NX, N+1)
 		self.sym_control_ref_vector = MatrixSymbol('u_ref', model.NU, N)
 
-		self.P = np.zeros((N*len(Q_0)+len(R_0), N*len(Q_0)+len(R_0)))
-
-		for i in range(0, N):
-			self.P[i*len(Q_0):(i+1)*len(Q_0), i*len(Q_0):(i+1)*len(Q_0)] = Q_0*self.dt
-		self.P[N*len(Q_0):, N*len(Q_0):] = self.R_0
-
-		self.P = self.P
-		
-		self.gen_code+= "def P_mat(x, u, params):\n\tP = np.array("
-		self.gen_code+= np.array2string(np.array(self.P), separator=',')
-		self.gen_code+= ")\n\treturn P\n"
-		
+		self.sym_X = Matrix([])
 		self.sym_X_ref = Matrix([])
 		for i in range(0, self.N+1):
+			state_vec = sympy.zeros(self.model.NX, 1)
 			state_ref_vec = sympy.zeros(self.model.NX, 1)
 			for j in range(0, self.model.NX):
+				state_vec[j, 0] = self.sym_state_vector[j,i]
 				state_ref_vec[j, 0] = self.sym_state_ref_vector[j,i]
+			self.sym_X = self.sym_X.col_join(state_vec)
 			self.sym_X_ref = self.sym_X_ref.col_join(state_ref_vec)
 			
 			if(i == self.N):
 				continue
+			control_vec = sympy.zeros(self.model.NU, 1)
 			control_ref_vec = sympy.zeros(self.model.NU, 1)
 			for j in range(0, self.model.NU):
+				control_vec[j, 0] = self.sym_control_vector[j,i]
 				control_ref_vec[j, 0] = self.sym_control_ref_vector[j,i]
+			self.sym_X = self.sym_X.col_join(control_vec)
 			self.sym_X_ref = self.sym_X_ref.col_join(control_ref_vec)
-			
-		self.q = -2*self.P.T*self.sym_X_ref
-		self.gen_code += "def q_mat(x_ref, u_ref):\n\tq = "
+		
+		self.gen_code += "def forward_integration(x0, u0, params, dt):\n\tx_next = "
+		self.gen_code += sympy.printing.lambdarepr.lambdarepr(self.forward_integration)
+		self.gen_code = self.gen_code.replace("ImmutableDenseMatrix", "np.array")
+		self.gen_code += ".astype(float)\n\treturn x_next\n"
+
+		self.P = np.zeros((self.N*len(Q_0)+len(R_0), self.N*len(Q_0)+len(R_0)))
+
+		for i in range(0, self.N):
+			self.P[i*len(Q_0):(i+1)*len(Q_0), i*len(Q_0):(i+1)*len(Q_0)] = self.Q_0
+		self.P[self.N*len(Q_0):, self.N*len(Q_0):] = self.R_0
+		
+		self.gen_code+= "def P_mat(x, u, params):\n\tP = np.array("
+		self.gen_code+= np.array2string(np.array(self.P), separator=',')
+		self.gen_code+= ").astype(float)\n\treturn P\n"
+				
+		self.q = self.P*(self.sym_X-self.sym_X_ref)
+		self.gen_code += "def q_mat(x, u, x_ref, u_ref):\n\tq = "
 		self.gen_code += sympy.printing.lambdarepr.lambdarepr(self.q)
 		self.gen_code = self.gen_code.replace("ImmutableDenseMatrix", "np.array")
-		self.gen_code += "\n\treturn q\n"
+		self.gen_code += ".astype(float)\n\treturn q\n"
 		self.q = lambdify([self.sym_X_ref.T], np.array(np.squeeze(self.q)), 'numpy')
 		
 		self.code_gen_file_name = code_gen_file_name
@@ -137,11 +139,11 @@ class MPC:
 		self.gen_code += "def A_mat(x0, x, u, params):\n\tA = "
 		self.gen_code += sympy.printing.lambdarepr.lambdarepr(self.A)
 		self.gen_code = self.gen_code.replace("ImmutableDenseMatrix", "np.array")
-		self.gen_code += "\n\treturn A\n"
+		self.gen_code += ".astype(float)\n\treturn A\n"
 		self.gen_code += "def b_mat(x0, x, u, params):\n\tb = "
 		self.gen_code += sympy.printing.lambdarepr.lambdarepr(self.b)
 		self.gen_code = self.gen_code.replace("ImmutableDenseMatrix", "np.array")
-		self.gen_code += "\n\treturn b\n"
+		self.gen_code += ".astype(float)\n\treturn b\n"
 	
 		# lambdifying
 		self.A = lambdify([self.sym_X.T], np.squeeze(self.A.transpose()))
@@ -160,10 +162,10 @@ class MPC:
 		self.gen_code += "noineq = False\n"
 		self.gen_code+= "def G_mat(x, u, params):\n\tG = np.array("
 		self.gen_code+= np.array2string(np.array(self.G), separator=',')
-		self.gen_code+= ")\n\treturn G\n"
+		self.gen_code+= ").astype(float)\n\treturn G\n"
 		self.gen_code+= "def h_mat(x, u, params):\n\th = np.array("
 		self.gen_code+= np.array2string(np.array(self.h), separator=',')
-		self.gen_code+= ")\n\treturn h\n"
+		self.gen_code+= ").astype(float)\n\treturn h\n"
 		
 		text_file = open(self.code_gen_file_name+".py", "w")
 		text_file.write(self.gen_code)
