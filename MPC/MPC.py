@@ -4,12 +4,13 @@ from sympy import *
 from sympy.printing.ccode import C99CodePrinter
 import numpy as np
 from cvxopt import matrix, solvers
+import sys
 
 class MPC:
 	
 	def __init__(self, model, N, T, Q_0, R_0, eq_constraint, ineq_constraint, term_ineq_constraint, term_eq_constraint, code_gen_file_name):
 		
-		np.set_printoptions(threshold=np.nan)
+		np.set_printoptions(threshold=sys.maxsize)
 		init_printing()
 		self.printer = C99CodePrinter()
 		
@@ -101,7 +102,7 @@ class MPC:
 		self.gen_code+= np.array2string(np.array(self.P), separator=',')
 		self.gen_code+= ").astype(float)\n\treturn P\n"
 				
-		self.q = self.P*(self.sym_X-self.sym_X_ref)
+		self.q = self.P*(self.sym_X-2*self.sym_X_ref)
 		self.gen_code += "def q_mat(x, u, x_ref, u_ref):\n\tq = "
 		self.gen_code += sympy.printing.lambdarepr.lambdarepr(self.q)
 		self.gen_code = self.gen_code.replace("ImmutableDenseMatrix", "np.array")

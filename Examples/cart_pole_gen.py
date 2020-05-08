@@ -3,12 +3,12 @@ from Models.cart_pole import CartPole
 import numpy as np
 from MPC.MPC import *
 
-N = 2; T = 1;
+N = 10; T = 1;
 
 Q = 1e-1*np.eye(CartPole.NX+CartPole.NU)
-Q[0, 0] = 2
+Q[0, 0] = 5
 R = np.eye(CartPole.NX)
-R[0, 0] = 20
+R[0, 0] = 50
 
 eq_constraint = None
 def ineq_constraint(state_vec, control_vec, params):

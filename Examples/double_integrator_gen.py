@@ -5,10 +5,8 @@ from MPC.MPC import *
 
 N = 10; T = 1.;
 
-Q = 1e-3*np.eye(DoubleIntegrator.NX+DoubleIntegrator.NU)
-Q[0, 0] = 1
-R = np.eye(DoubleIntegrator.NX)
-R[0, 0] = 5
+Q = np.eye(DoubleIntegrator.NX+DoubleIntegrator.NU)
+R = 5np.eye(DoubleIntegrator.NX)
 
 eq_constraint = None
 def ineq_constraint(state_vec, control_vec, params):
