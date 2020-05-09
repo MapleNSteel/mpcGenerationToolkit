@@ -3,18 +3,18 @@ from Models.double_integrator import DoubleIntegrator
 import numpy as np
 from MPC.MPC import *
 
-N = 10; T = 1.;
+N = 1; T = 0.1;
 
 Q = np.eye(DoubleIntegrator.NX+DoubleIntegrator.NU)
-R = 5np.eye(DoubleIntegrator.NX)
+R = 5*np.eye(DoubleIntegrator.NX)
 
 eq_constraint = None
 def ineq_constraint(state_vec, control_vec, params):
 	g = Matrix([])
 	
 	for i in range(0, state_vec.shape[1]):
-		g = g.col_join(Matrix([state_vec[1, i]-1.5]))
-		g = g.col_join(Matrix([-state_vec[1, i]-1.5]))
+		g = g.col_join(Matrix([state_vec[0, i]-1.5]))
+		g = g.col_join(Matrix([-state_vec[0, i]-1.5]))
 
 	for i in range(0, control_vec.shape[1]):
 		g = g.col_join(Matrix([control_vec[0, i]-1]))

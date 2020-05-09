@@ -7,8 +7,8 @@ from Solver import Solver
 x1_0 = 0.0; x2_0 = 0.0;
 N = code_gen.N; T = code_gen.T;
 NX = code_gen.NX; NU = code_gen.NU; NP = code_gen.NP
-num_iter = 10;
-num_steps = 50;
+num_iter = 1;
+num_steps = 1 ;
 # initial values
 X_0 = np.zeros((NX, N+1));
 X_0[:,0] = np.array([x1_0, x2_0]);
@@ -47,9 +47,11 @@ for i in range(0, num_steps):
 
 	#print(np.shape(X_f))
 	#print(np.shape(U_f))
-	print(X_f[:,0:1])
-	print(U_f[:,0:1])
+#	print(X_f[:,0:1])
+#	print(U_f[:,0:1])
 	#print(soln['x'])
+	print(X_f)
+	print(U_f)
 	X_f[:,0] = np.transpose(code_gen.forward_integration(np.reshape(X_f[:,0:1], (NX, 1)), np.reshape(U_f[:,0:1], (NU, 1)), np.reshape(params[:,0:1], (NP, 1)), T/N))
 	for k in range(0, N):
 		X_f[:,k+1] = np.transpose(code_gen.forward_integration(np.reshape(X_f[:,k:k+1], (NX, 1)), np.reshape(U_f[:,k:k+1], (NU, 1)), np.reshape(params[:,k:k+1], (NP, 1)), T/N))
