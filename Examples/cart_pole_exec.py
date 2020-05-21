@@ -5,7 +5,7 @@ from Solver import Solver
 import matplotlib.pyplot as plt
 
 # Initial Conditions
-x1_0 = 0.1; x2_0 = 0.05; x3_0 = 0.0; x4_0 = 0.0; 
+x1_0 = 1; x2_0 = 0.5; x3_0 = 0.0; x4_0 = 0.0; 
 N = code_gen.N; T = code_gen.T;
 NX = code_gen.NX; NU = code_gen.NU; NP = code_gen.NP
 num_iter = 10;
@@ -20,7 +20,7 @@ params = np.zeros((0, N))
 X_ref = np.zeros((NX, N+1));
 U_ref = np.zeros((NU, N));
 
-X_ref = np.tile(np.array([[0.2], [0.0], [0.0], [0.0]]), (1, N+1))
+X_ref = np.tile(np.array([[2], [0.0], [0.0], [0.0]]), (1, N+1))
 
 X_f = X_0
 U_f = U_0
