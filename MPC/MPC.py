@@ -96,25 +96,25 @@ class MPC:
 			self.J+= (temp-temp_ref).T*Q_0*(temp-temp_ref)
 			
 		self.J *= 0.5
+		self.sym_X = ImmutableMatrix(self.sym_X)
+		self.sym_X_ref = ImmutableMatrix(self.sym_X_ref)
 		
 		self.gen_code += "def forward_integration(x0, u0, params, dt):\n\tx_next = "
 		self.gen_code += sympy.printing.lambdarepr.lambdarepr(self.forward_integration)
 		self.gen_code = self.gen_code.replace("ImmutableDenseMatrix", "np.array")
 		self.gen_code += ".astype(float)\n\treturn x_next\n"
-
-		self.P = np.zeros((self.N*len(Q_0)+len(R_0), self.N*len(Q_0)+len(R_0)))
-
-		for i in range(0, self.N):
-			self.P[i*len(Q_0):(i+1)*len(Q_0), i*len(Q_0):(i+1)*len(Q_0)] = self.Q_0
-		self.P[self.N*len(Q_0):, self.N*len(Q_0):] = self.R_0
 		
-		self.P = 0.5*self.P
+		self.q = self.J.jacobian(self.sym_X).T
+		self.P = self.q.jacobian(self.sym_X)
+		
+		for i in range(0, (self.N+1)*self.model.NX + self.N*self.model.NU):
+				self.q = self.q.subs(self.sym_X[i], 0)
+				self.P = self.P.subs(self.sym_X[i], 0)
 		
 		self.gen_code+= "def P_mat(x, u, params):\n\tP = np.array("
 		self.gen_code+= np.array2string(np.array(self.P), separator=',')
 		self.gen_code+= ").astype(float)\n\treturn P\n"
-				
-		self.q = self.P*(-self.sym_X_ref)
+		
 		self.gen_code += "def q_mat(x, u, x_ref, u_ref):\n\tq = "
 		self.gen_code += sympy.printing.lambdarepr.lambdarepr(self.q)
 		self.gen_code = self.gen_code.replace("ImmutableDenseMatrix", "np.array")

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 x1_0 = 1; x2_0 = 0.5; x3_0 = 0.0; x4_0 = 0.0; 
 N = code_gen.N; T = code_gen.T;
 NX = code_gen.NX; NU = code_gen.NU; NP = code_gen.NP
-num_iter = 10;
+num_iter = 20;
 num_steps = 100;
 # initial values
 X_0 = np.zeros((NX, N+1));
