@@ -30,6 +30,8 @@ code_gen_file_name = "Code_Gen/code_gen_double_integrator"
 
 #Initialise MPC
 mpc = MPC(DoubleIntegrator, N, T, Q, R, eq_constraint, ineq_constraint, term_ineq_constraint, term_eq_constraint, code_gen_file_name)
+mpc.lineariseObjective()
 mpc.initialiseEqualityConstraints()
 mpc.initialiseInequalityConstraints()
 mpc.lineariseConstraints()
+mpc.writeGenCode()

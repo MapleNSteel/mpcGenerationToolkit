@@ -29,9 +29,12 @@ term_eq_constraint = None
 CartPole = CartPole(RK4)
 
 code_gen_file_name = "Code_Gen/code_gen_cart_pole"
+code_gen_language = "py"
 
 #Initialise MPC
-mpc = MPC(CartPole, N, T, Q, R, eq_constraint, ineq_constraint, term_ineq_constraint, term_eq_constraint, code_gen_file_name)
+mpc = MPC(CartPole, N, T, Q, R, eq_constraint, ineq_constraint, term_ineq_constraint, term_eq_constraint, code_gen_file_name, code_gen_language)
+mpc.lineariseObjective()
 mpc.initialiseEqualityConstraints()
 mpc.initialiseInequalityConstraints()
 mpc.lineariseConstraints()
+mpc.writeGenCode()
