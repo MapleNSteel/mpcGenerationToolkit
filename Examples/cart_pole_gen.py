@@ -23,16 +23,18 @@ def ineq_constraint(state_vec, control_vec, params):
 		g = g.col_join(Matrix([-control_vec[0, i]-1]))
 	return g
 
-term_ineq_constraint = None
+term_ineq_constraint = ineq_constraint
 term_eq_constraint = None
 
 CartPole = CartPole(RK4)
 
 code_gen_file_name = "Code_Gen/code_gen_cart_pole"
-code_gen_language = "py"
+code_gen_language = "cpp"
+matrix_form = "1drow"
+ineq_form = "l_ineq"
 
 #Initialise MPC
-mpc = MPC(CartPole, N, T, Q, R, eq_constraint, ineq_constraint, term_ineq_constraint, term_eq_constraint, code_gen_file_name, code_gen_language)
+mpc = MPC(CartPole, N, T, Q, R, eq_constraint, term_eq_constraint, ineq_constraint, term_ineq_constraint, code_gen_file_name, code_gen_language, matrix_form, ineq_form)
 mpc.lineariseObjective()
 mpc.initialiseEqualityConstraints()
 mpc.initialiseInequalityConstraints()

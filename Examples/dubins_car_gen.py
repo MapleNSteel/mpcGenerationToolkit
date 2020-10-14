@@ -27,9 +27,11 @@ term_eq_constraint = None
 DubinsCar = DubinsCar(RK4)
 
 code_gen_file_name = "Code_Gen/code_gen_dubins_car"
+matrix_form = "2d"
+ineq_form = "l_ineq"
 
 #Initialise MPC
-mpc = MPC(DubinsCar, N, T, Q, R, eq_constraint, ineq_constraint, term_ineq_constraint, term_eq_constraint, code_gen_file_name)
+mpc = MPC(DubinsCar, N, T, Q, R, eq_constraint, term_eq_constraint, ineq_constraint, term_ineq_constraint, code_gen_file_name, matrix_form, ineq_form)
 mpc.lineariseObjective()
 mpc.initialiseEqualityConstraints()
 mpc.initialiseInequalityConstraints()
