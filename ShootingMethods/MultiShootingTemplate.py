@@ -1,9 +1,6 @@
 import numpy as np
 from sympy import *
 
-def initialiseStatesAndControl(X):
-	return
-
 def getEqualityConstraintMatrices(N, model, sym_state_vector, sym_control_vector, params):
 
 	h = []

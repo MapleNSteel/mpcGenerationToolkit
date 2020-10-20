@@ -9,22 +9,26 @@ from pathlib import Path
 
 class MPC:
 
-        global lang_list, matrix_form_list, ineq_form_list
+        global discretisation_list, lang_list, matrix_form_list, ineq_form_list
         
+        discretisation_list = ["single_shooting", "multiple_shooting"]
         lang_list = ["cpp", "py"]
         matrix_form_list = ["1drow", "1dcol", "2d"]
         ineq_form_list = ["l_ineq", "lr_ineq"]
         
-        def __init__(self, model, N, T, Q_0, R_0, eq_constraint, term_eq_constraint, ineq_constraint, term_ineq_constraint, code_gen_file_name, code_gen_language, matrix_form, ineq_form):
+        def __init__(self, model, N, T, Q_0, R_0, eq_constraint, term_eq_constraint, ineq_constraint, term_ineq_constraint, code_gen_file_name, discretisation_method, code_gen_language, matrix_form, ineq_form):
         
-                global lang_list, matrix_form_list, ineq_form_list
+                global discretisation_list, lang_list, matrix_form_list, ineq_form_list
                 
+                assert discretisation_method in discretisation_list
                 assert code_gen_language in lang_list
                 assert matrix_form in matrix_form_list
                 assert ineq_form in ineq_form_list
                 
+                self.discretisation_method = discretisation_method
                 self.code_gen_language = code_gen_language
                 self.matrix_form = matrix_form
+                self.ineq_form = ineq_form
                 
                 np.set_printoptions(threshold=sys.maxsize)
                 init_printing()
@@ -39,7 +43,6 @@ class MPC:
                 self.writeParams()
                 
                 self.lambda_forward = self.model.getForwardIntegrationLambda()
-                self.forward_integration = self.model.forward_integration
                 
                 x0 = MatrixSymbol('x0', model.NX, 1)
                 u0 = MatrixSymbol('u0', model.NU, 1)
@@ -47,15 +50,10 @@ class MPC:
                 dt = Symbol('dt')
                 
                 self.x0 = x0
+                self.u0 = u0
                 self.params = params
                 
-                for i in range(0, model.NX):
-                        self.forward_integration = self.forward_integration.subs(self.model.state[i], x0[i])
-                for i in range(0, model.NU):
-                        self.forward_integration = self.forward_integration.subs(self.model.control[i], u0[i])
-                for i in range(0, model.NP):
-                        self.forward_integration = self.forward_integration.subs(self.model.params[i], param[i])
-                self.forward_integration = self.forward_integration.subs(self.model.dt, dt)
+                self.setupForwardIntegrator()
                 
                 self.Q_0 = Q_0
                 self.R_0 = R_0
@@ -74,8 +72,13 @@ class MPC:
                 self.sym_state_ref_vector = MatrixSymbol('x_ref', model.NX, N+1)
                 self.sym_control_ref_vector = MatrixSymbol('u_ref', model.NU, N)
 
+                self.sym_Opt = Matrix([])
+                self.sym_Opt_ref = Matrix([])
                 self.sym_X = Matrix([])
                 self.sym_X_ref = Matrix([])
+                self.sym_U = Matrix([])
+                self.sym_U_ref = Matrix([])
+                
                 self.J = Matrix([0])
                 for i in range(0, self.N+1):
                         state_vec = sympy.zeros(self.model.NX, 1)
@@ -85,12 +88,16 @@ class MPC:
                                 state_ref_vec[j, 0] = self.sym_state_ref_vector[j,i]
                         temp = state_vec
                         temp_ref = state_ref_vec
-                        self.sym_X = self.sym_X.col_join(state_vec)
-                        self.sym_X_ref = self.sym_X_ref.col_join(state_ref_vec)
+                        
+                        self.sym_X = self.sym_X.col_join(temp)
+                        self.sym_X_ref = self.sym_X_ref.col_join(temp_ref)
                         
                         if(i == self.N):
-                                self.J+= (temp-temp_ref).T*R_0*(temp-temp_ref)
-                                continue
+                                if(self.discretisation_method=="multiple_shooting"):
+                                        self.sym_Opt = self.sym_Opt.col_join(temp)
+                                        self.sym_Opt_ref = self.sym_Opt_ref.col_join(temp_ref)
+                                        self.J+= (temp-temp_ref).T*R_0*(temp-temp_ref)
+                                        continue
                         control_vec = sympy.zeros(self.model.NU, 1)
                         control_ref_vec = sympy.zeros(self.model.NU, 1)
                         for j in range(0, self.model.NU):
@@ -98,14 +105,37 @@ class MPC:
                                 control_ref_vec[j, 0] = self.sym_control_ref_vector[j,i]
                         temp = temp.col_join(control_vec)
                         temp_ref = temp_ref.col_join(control_ref_vec)
-                        self.sym_X = self.sym_X.col_join(control_vec)
-                        self.sym_X_ref = self.sym_X_ref.col_join(control_ref_vec)
                         
-                        self.J+= (temp-temp_ref).T*Q_0*(temp-temp_ref)
+                        self.sym_U = self.sym_U.col_join(control_vec)
+                        self.sym_U_ref = self.sym_U_ref.col_join(control_ref_vec)
                         
-                self.J *= 0.5
-                self.sym_X = ImmutableMatrix(self.sym_X)
-                self.sym_X_ref = ImmutableMatrix(self.sym_X_ref)
+                        self.sym_Opt = self.sym_Opt.col_join(temp)
+                        self.sym_Opt_ref = self.sym_Opt_ref.col_join(temp_ref)
+                        
+                        self.J+= 0.5*(temp-temp_ref).T*Q_0*(temp-temp_ref)
+                        
+                self.sym_Opt = ImmutableMatrix(self.sym_Opt)
+                self.sym_Opt_ref = ImmutableMatrix(self.sym_Opt_ref)
+                
+                if(self.discretisation_method=="single_shooting"):      
+                        for j in range(0, model.NX):
+                                next_state = temp_f.subs(model.state[j], self.sym_state_vector[j,0])
+                        for j in range(0, model.NU):
+                                next_state = temp_f.subs(model.control[j], sym_control_vector[j,0])
+                        for j in range(0, model.NP):
+                                next_state = temp_f.subs(model.params[j], params[j,0])
+                                
+                        for i in range(1, N+1):
+                                for j in range(0, model.NX):
+                                        self.J.subs(self.sym_state_vector[j,i], next_state[j])
+                                        next_state = temp_f.subs(sym_state_vector[j,i], next_state[j])
+                                for j in range(0, model.NU):
+                                        next_state = temp_f.subs(sym_control_vector[j,i], sym_control_vector[j,i])
+                                for j in range(0, model.NP):
+                                        next_state = temp_f.subs(params[j,i], params[j,i])
+                        for j in range(0, model.NX):
+                                next_state = temp_f.subs(self.sym_state_vector[j,0], self.x0[j])                
+                        
                 
                 if(self.code_gen_language == "py"):
                         self.gen_code += "def forward_integration(x0, u0, params, dt):\n\tx_next = "
@@ -167,14 +197,24 @@ class MPC:
                         self.gen_code+= str(self.model.NP)
                         self.gen_code+= ";\n"
                 
+        def setupForwardIntegrator(self):
+                self.forward_integration = self.model.forward_integration
+                for i in range(0, self.model.NX):
+                        self.forward_integration = self.forward_integration.subs(self.model.state[i], self.x0[i])
+                for i in range(0, self.model.NU):
+                        self.forward_integration = self.forward_integration.subs(self.model.control[i], self.u0[i])
+                for i in range(0, self.model.NP):
+                        self.forward_integration = self.forward_integration.subs(self.model.params[i], param[i])
+                self.forward_integration = self.forward_integration.subs(self.model.dt, self.dt)
+                
         def lineariseObjective(self):
                 
-                self.q = self.J.jacobian(self.sym_X).T
-                self.P = self.q.jacobian(self.sym_X)
+                self.q = self.J.jacobian(self.sym_Opt).T
+                self.P = self.q.jacobian(self.sym_Opt)
                 
                 for i in range(0, (self.N+1)*self.model.NX + self.N*self.model.NU):
-                                self.q = self.q.subs(self.sym_X[i], 0)
-                                self.P = self.P.subs(self.sym_X[i], 0)
+                                self.q = self.q.subs(self.sym_Opt[i], 0)
+                                self.P = self.P.subs(self.sym_Opt[i], 0)
                                                 
                 if(self.code_gen_language == "py"):                
                         self.gen_code+= "def P_mat(x, u, params):\n\tP = np.array("
@@ -185,7 +225,7 @@ class MPC:
                         self.gen_code += sympy.printing.lambdarepr.lambdarepr(self.q)
                         self.gen_code = self.gen_code.replace("ImmutableDenseMatrix", "np.array")
                         self.gen_code += ".astype(float)\n\treturn q\n"
-                        self.q = lambdify([self.sym_X_ref.T], np.array(np.squeeze(self.q)), 'numpy')                        
+                        self.q = lambdify([self.sym_Opt_ref.T], np.array(np.squeeze(self.q)), 'numpy')                        
                         
                 elif(self.code_gen_language == "cpp"):
                         if(self.matrix_form == "2d"):
@@ -228,10 +268,11 @@ class MPC:
                 
         def initialiseEqualityConstraints(self):
                 # Multiple-shooting constraint
-                self.h = sympy.zeros(self.model.NX, 1)
-                for j in range(0, self.model.NX):
-                        self.h[j, 0] = self.sym_state_vector[j,0]-self.x0[j,0]
-                self.h = self.h.col_join(MultiShootingTemplate.getEqualityConstraintMatrices(self.N, self.model, self.sym_state_vector, self.sym_control_vector, self.params))
+                if(self.discretisation_method == "multiple_shooting"):
+                        self.h = sympy.zeros(self.model.NX, 1)
+                        for j in range(0, self.model.NX):
+                                self.h[j, 0] = self.sym_state_vector[j,0]-self.x0[j,0]
+                        self.h = self.h.col_join(MultiShootingTemplate.getEqualityConstraintMatrices(self.N, self.model, self.sym_state_vector, self.sym_control_vector, self.params))
                 # Eq constraint
                 if(self.term_eq_constraint != None):
                         self.h.col_join(self.eq_constraint(self.sym_state_vector[0:,-1], self.params))
@@ -252,8 +293,8 @@ class MPC:
 
         def lineariseConstraints(self):
                 # linearisation
-                self.A = self.h.jacobian(self.sym_X)
-                self.b = -(self.h-self.A*self.sym_X)
+                self.A = self.h.jacobian(self.sym_Opt)
+                self.b = -(self.h-self.A*self.sym_Opt)
                 # printing to file
                 if(self.code_gen_language == "py"):
                         self.gen_code += "def A_mat(x0, x, u, params):\n\tA = "
@@ -308,8 +349,8 @@ class MPC:
                         self.gen_code += "}\n"
         
                 # lambdifying
-                self.A = lambdify([self.sym_X.T], np.squeeze(self.A.transpose()))
-                self.b = lambdify([self.sym_X.T], np.squeeze(self.b.transpose()))
+                self.A = lambdify([self.sym_Opt.T], np.squeeze(self.A.transpose()))
+                self.b = lambdify([self.sym_Opt.T], np.squeeze(self.b.transpose()))
 
                 if(self.ineq_constraint == None and self.term_ineq_constraint == None):
                         self.gen_code += "noineq = True\n"
@@ -318,8 +359,8 @@ class MPC:
                 # Inequality constraints
                 self.g = self.g.subs(self.model.dt, self.dt)
 
-                self.G = self.g.jacobian(self.sym_X)
-                self.h = -(self.g-self.G*self.sym_X)
+                self.G = self.g.jacobian(self.sym_Opt)
+                self.h = -(self.g-self.G*self.sym_Opt)
                 
                 if(self.code_gen_language == "py"):
                         self.gen_code += "noineq = False\n"
@@ -369,8 +410,8 @@ class MPC:
                         self.gen_code += "}\n"
 
                 # lambdifying
-                self.G = lambdify([self.sym_X.T], np.squeeze(self.G))
-                self.h = lambdify([self.sym_X.T], np.squeeze(self.h))
+                self.G = lambdify([self.sym_Opt.T], np.squeeze(self.G))
+                self.h = lambdify([self.sym_Opt.T], np.squeeze(self.h))
 
         def writeGenCode(self):
                 if(self.code_gen_language == "py"):

@@ -7,6 +7,8 @@ N = 10; T = 1;
 
 Q = 1e-1*np.eye(CartPole.NX+CartPole.NU)
 Q[0, 0] = 5
+Q[2, 2] = 100
+Q[3, 3] = 10
 R = np.eye(CartPole.NX)
 R[0, 0] = 50
 
@@ -29,12 +31,13 @@ term_eq_constraint = None
 CartPole = CartPole(RK4)
 
 code_gen_file_name = "Code_Gen/code_gen_cart_pole"
+discretisation_method = "multiple_shooting"
 code_gen_language = "cpp"
 matrix_form = "1drow"
 ineq_form = "l_ineq"
 
 #Initialise MPC
-mpc = MPC(CartPole, N, T, Q, R, eq_constraint, term_eq_constraint, ineq_constraint, term_ineq_constraint, code_gen_file_name, code_gen_language, matrix_form, ineq_form)
+mpc = MPC(CartPole, N, T, Q, R, eq_constraint, term_eq_constraint, ineq_constraint, term_ineq_constraint, code_gen_file_name, discretisation_method, code_gen_language, matrix_form, ineq_form)
 mpc.lineariseObjective()
 mpc.initialiseEqualityConstraints()
 mpc.initialiseInequalityConstraints()
